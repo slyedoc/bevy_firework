@@ -2,9 +2,11 @@ use std::f32::consts::FRAC_PI_2;
 
 use avian3d::prelude::{Collider, SpatialQueryFilter};
 use bevy::{
-    core_pipeline::{bloom::Bloom, prepass::DepthPrepass},
+    core_pipeline::prepass::DepthPrepass,
     image::{ImageLoaderSettings, ImageSamplerDescriptor},
+    post_process::bloom::Bloom,
     prelude::*,
+    render::view::Hdr,
 };
 use bevy_firework::{
     core::{
@@ -214,11 +216,8 @@ fn setup(
     // camera
     commands.spawn((
         Camera3d::default(),
-        Camera {
-            hdr: true,
-            ..default()
-        },
         Transform::from_xyz(0., 8., 0.).looking_at(Vec3::ZERO, Vec3::NEG_Z),
+        Hdr,
         Bloom::default(),
         DepthPrepass::default(),
         // For now,Msaa must be disabled on the web due to this:

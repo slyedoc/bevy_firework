@@ -2,34 +2,19 @@ use crate::plugin::PARTICLE_SHADER_HANDLE;
 
 use super::core::{ParticleData, ParticleSpawner, ParticleSpawnerData};
 use bevy::{
-    core_pipeline::{
-        core_3d::{CORE_3D_DEPTH_FORMAT, Transparent3d},
+    camera::{primitives::Aabb, visibility::RenderLayers}, core_pipeline::{
+        core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT},
         prepass::{
             DeferredPrepass, DepthPrepass, MotionVectorPrepass, NormalPrepass, ViewPrepassTextures,
         },
-    },
-    ecs::system::{SystemParamItem, lifetimeless::*},
-    pbr::{
+    }, ecs::system::{lifetimeless::*, SystemParamItem}, light::ShadowFilteringMethod, mesh::VertexBufferLayout, pbr::{
         MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshViewBindGroup,
-        ShadowFilteringMethod,
-    },
-    platform::collections::HashMap,
-    prelude::*,
-    render::{
-        Extract, Render, RenderApp, RenderSet,
-        extract_component::{ComponentUniforms, DynamicUniformIndex, UniformComponentPlugin},
-        primitives::Aabb,
-        render_asset::RenderAssets,
-        render_phase::{
+    }, platform::collections::HashMap, prelude::*, render::{
+        extract_component::{ComponentUniforms, DynamicUniformIndex, UniformComponentPlugin}, render_asset::RenderAssets, render_phase::{
             AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        },
-        render_resource::*,
-        renderer::RenderDevice,
-        sync_world::MainEntity,
-        texture::GpuImage,
-        view::{ExtractedView, RenderLayers, ViewTarget},
-    },
+        }, render_resource::*, renderer::RenderDevice, sync_world::MainEntity, texture::GpuImage, view::{ExtractedView, ViewTarget}, Extract, Render, RenderApp, RenderSystems
+    }
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -55,9 +40,9 @@ impl Plugin for CustomMaterialPlugin {
                 (
                     ensure_dummy_textures_exist,
                     (
-                        queue_custom.in_set(RenderSet::QueueMeshes),
-                        prepare_instance_buffers.in_set(RenderSet::PrepareResources),
-                        prepare_firework_bindgroup.in_set(RenderSet::PrepareBindGroups),
+                        queue_custom.in_set(RenderSystems::QueueMeshes),
+                        prepare_instance_buffers.in_set(RenderSystems::PrepareResources),
+                        prepare_firework_bindgroup.in_set(RenderSystems::PrepareBindGroups),
                     ),
                 )
                     .chain(),
@@ -702,7 +687,7 @@ fn update_aabbs(mut query: Query<(&mut Aabb, &GlobalTransform, &ParticleSpawnerD
         let center = (min + max) / 2.;
         let half_extents = (max - min) / 2.;
         aabb.center = global_transform
-            .compute_matrix()
+            .to_matrix()
             .inverse()
             .transform_point3(center)
             .into();
@@ -758,8 +743,8 @@ impl SpecializedRenderPipeline for FireworkPipeline {
     type Key = MeshPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let view_layout = self.mesh_pipeline.get_view_layout(key.into()).clone();
-        let layout = vec![view_layout, self.uniform_layout.clone()];
+        let view_layout = self.mesh_pipeline.get_view_layout(key.into());
+        let layout = vec![view_layout.main_layout.clone(), self.uniform_layout.clone()];
         let format = if key.contains(MeshPipelineKey::HDR) {
             ViewTarget::TEXTURE_FORMAT_HDR
         } else {
@@ -795,7 +780,7 @@ impl SpecializedRenderPipeline for FireworkPipeline {
                 // we need to add MESH_BINDGROUP_1 shader def so that the bindings are correctly
                 // linked in the shader
                 shader_defs: shader_defs.clone(),
-                entry_point: "vertex".into(),
+                entry_point: Some("vertex".into()),
                 buffers: vec![VertexBufferLayout {
                     array_stride: std::mem::size_of::<ParticleInstance>() as u64,
                     step_mode: VertexStepMode::Instance,
@@ -833,7 +818,7 @@ impl SpecializedRenderPipeline for FireworkPipeline {
                 // we need to add MESH_BINDGROUP_1 shader def so that the bindings are correctly
                 // linked in the shader
                 shader_defs,
-                entry_point: "fragment".into(),
+                entry_point: Some("fragment".into()),
                 targets: vec![Some(ColorTargetState {
                     format,
                     blend: Some(BlendState::ALPHA_BLENDING),
@@ -877,8 +862,8 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetFireworkBindGroup<I> 
 
     fn render<'w>(
         _item: &P,
-        view_entity: bevy::ecs::query::ROQueryItem<'w, Self::ViewQuery>,
-        item_query: bevy::ecs::query::ROQueryItem<'w, Option<Self::ItemQuery>>,
+        view_entity: bevy::ecs::query::ROQueryItem<'w, '_, Self::ViewQuery>,
+        item_query: Option<bevy::ecs::query::ROQueryItem<'w, '_, Self::ItemQuery>>,
         _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -903,8 +888,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawFirework {
     #[inline]
     fn render<'w>(
         _item: &P,
-        _view: (),
-        instance_buffer: Option<&'w InstanceBuffer>,
+        _view: bevy::ecs::query::ROQueryItem<'w, '_, Self::ViewQuery>,
+        instance_buffer: Option<bevy::ecs::query::ROQueryItem<'w, '_, Self::ItemQuery>>,
         _: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
