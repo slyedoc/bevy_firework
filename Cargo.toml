@@ -22,7 +22,7 @@ bytemuck = "1"
 rand = "0.9.2"
 bevy_utilitarian = { git = "https://github.com/slyedoc/bevy_utilitarian.git", branch = "master" }
 serde = { version = "1.0", features = ["derive"] }
-avian3d = { git = "https://github.com/Jondolf/avian", branch = "main", features = ["serialize"], optional = true }
+avian3d = { version = "0.4", features = ["serialize"], optional = true }
 
 [dev-dependencies]
 bevy = { version = "0.17", default-features = false, features = [
